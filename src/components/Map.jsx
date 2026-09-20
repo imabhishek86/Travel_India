@@ -71,8 +71,31 @@ const FitIndiaBounds = () => {
 };
 
 const Map = () => {
-  const [selectedLocation, setSelectedLocation] = useState(null);
+  const [selectedLocation, setSelectedLocation] = useState(() => {
+    try {
+      // NOTE: We cannot reliably distinguish between a normal reload (F5) 
+      // and a hard reload (Ctrl+F5) using the Performance Navigation API.
+      // Both return type === 'reload'. Therefore, to ensure the marker 
+      // survives a normal reload as requested, we always restore it.
+      // The user can remove the marker by double-clicking it.
+      const savedLocation = localStorage.getItem('travelMapSelectedLocation');
+      if (savedLocation) {
+        return JSON.parse(savedLocation);
+      }
+    } catch (error) {
+      console.error("Error reading localStorage:", error);
+    }
+    return null;
+  });
   const [showLocationCard, setShowLocationCard] = useState(false);
+
+  React.useEffect(() => {
+    if (selectedLocation) {
+      localStorage.setItem('travelMapSelectedLocation', JSON.stringify(selectedLocation));
+    } else {
+      localStorage.removeItem('travelMapSelectedLocation');
+    }
+  }, [selectedLocation]);
   const hideTimerRef = React.useRef(null);
   const navigate = useNavigate();
 
@@ -170,7 +193,7 @@ const Map = () => {
   }, []);
 
   return (
-    <div className="absolute inset-0 z-0 flex justify-center bg-slate-100">
+    <div className="absolute inset-0 z-0 flex justify-center bg-[#faf9f6]">
       <MapContainer 
         center={centerPosition} 
         zoom={5}
@@ -178,7 +201,7 @@ const Map = () => {
         maxBounds={indiaBounds}
         maxBoundsViscosity={1.0}
         scrollWheelZoom={true}
-        className="w-full h-full rounded-lg shadow-inner z-0"
+        className="w-full h-full z-0"
       >
         <FitIndiaBounds />
         <TileLayer
@@ -194,7 +217,15 @@ const Map = () => {
             eventHandlers={{
               mouseover: handleMouseEnter,
               mouseout: handleMouseLeave,
-              click: handleMouseEnter // Handle mobile taps
+              click: handleMouseEnter, // Handle mobile taps
+              dblclick: (e) => {
+                // Prevent map zoom on double-click
+                if (e.originalEvent) {
+                  L.DomEvent.stopPropagation(e.originalEvent);
+                }
+                setSelectedLocation(null);
+                setShowLocationCard(false);
+              }
             }}
           >
             {/* Tooltip acts as a hover card on desktop, tap card on mobile.
@@ -209,19 +240,19 @@ const Map = () => {
                 permanent={true}
               >
                 <div 
-                  className="flex flex-col gap-1.5 p-1.5 font-sans cursor-pointer group"
+                  className="flex flex-col gap-1 p-2 font-sans cursor-pointer group min-w-[140px]"
                   onClick={handleViewDetails}
                   onMouseEnter={handleMouseEnter}
                   onMouseLeave={handleMouseLeave}
                 >
-                  <span className="font-bold text-slate-800 text-[15px]">
-                    📍 {selectedLocation.name}
+                  <span className="font-bold font-serif text-stone-800 text-[16px] leading-tight tracking-tight">
+                    {selectedLocation.name}
                   </span>
-                  <span className="text-slate-500 text-[12px] font-medium border-b border-slate-100 pb-1.5 mb-0.5">
-                    Last visited: <span className="text-slate-700">{selectedLocation.lastVisited}</span>
+                  <span className="text-stone-500 text-[11px] font-medium border-b border-stone-100 pb-2 mb-1 uppercase tracking-wide">
+                    Visited: <span className="text-stone-800">{selectedLocation.lastVisited}</span>
                   </span>
-                  <span className="text-blue-600 text-[13px] font-bold group-hover:text-blue-700 transition-colors flex items-center justify-between">
-                    View Details <span>→</span>
+                  <span className="text-orange-700 text-[13px] font-medium group-hover:text-orange-800 transition-colors flex items-center justify-between">
+                    View Journal <span className="transform group-hover:translate-x-1 transition-transform">→</span>
                   </span>
                 </div>
               </Tooltip>

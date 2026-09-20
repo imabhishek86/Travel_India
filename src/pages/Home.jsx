@@ -8,11 +8,9 @@ const Home = () => {
     <div className="flex flex-col min-h-screen">
       <Header />
       
-      {/* Main Map Section - Takes remaining height */}
-      <main className="flex-grow p-4 md:p-6 bg-slate-50 flex flex-col items-center">
-        <div className="w-full max-w-6xl flex-grow min-h-[65vh] md:min-h-[70vh] relative rounded-xl overflow-hidden shadow-lg border border-slate-200">
-          <Map />
-        </div>
+      {/* Main Map Section - Full width and calculated height */}
+      <main className="w-full relative h-[calc(100vh-64px)]">
+        <Map />
       </main>
       
       <Footer />
