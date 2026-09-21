@@ -128,6 +128,7 @@ const Map = () => {
       lat: coords.lat,
       lng: coords.lng,
       name: "Locating...",
+      stateName: "",
       lastVisited: formattedDate
     });
     setShowLocationCard(true);
@@ -160,6 +161,7 @@ const Map = () => {
         lat: coords.lat,
         lng: coords.lng,
         name: locationName,
+        stateName: state,
         lastVisited: formattedDate
       });
 
@@ -171,6 +173,7 @@ const Map = () => {
         lat: coords.lat,
         lng: coords.lng,
         name: "Selected Location",
+        stateName: "",
         lastVisited: formattedDate
       });
     }
@@ -260,6 +263,59 @@ const Map = () => {
           </Marker>
         )}
       </MapContainer>
+
+      {/* Travel Statistics */}
+      <div className="absolute top-4 left-1/2 -translate-x-1/2 z-[1000] bg-white/95 backdrop-blur-sm py-2.5 px-4 md:py-3 md:px-8 rounded-xl shadow-sm border border-stone-200 flex flex-row flex-wrap justify-center md:flex-nowrap items-center gap-x-6 gap-y-3 pointer-events-none transition-all w-[92%] md:w-auto max-w-3xl">
+        
+        <div className="flex items-center gap-2.5">
+          <span className="text-xl leading-none">📍</span>
+          <div className="flex flex-col">
+            <span className="font-bold text-stone-800 text-sm md:text-base leading-none">
+              {selectedLocation ? 1 : 0}
+            </span>
+            <span className="text-stone-500 text-[10px] md:text-[11px] font-medium uppercase tracking-wider mt-0.5 whitespace-nowrap">
+              Places Visited
+            </span>
+          </div>
+        </div>
+
+        <div className="hidden md:block w-px h-6 bg-stone-200"></div>
+
+        <div className="flex items-center gap-2.5">
+          <span className="text-xl leading-none">🇮🇳</span>
+          <div className="flex flex-col">
+            <span className="font-bold text-stone-800 text-sm md:text-base leading-none">
+              {(selectedLocation && selectedLocation.stateName) ? 1 : 0}
+            </span>
+            <span className="text-stone-500 text-[10px] md:text-[11px] font-medium uppercase tracking-wider mt-0.5 whitespace-nowrap">
+              States Covered
+            </span>
+          </div>
+        </div>
+
+        <div className="hidden md:block w-px h-6 bg-stone-200"></div>
+
+        <div className="flex items-center gap-2.5">
+          <span className="text-xl leading-none">📸</span>
+          <div className="flex flex-col">
+            <span className="font-bold text-stone-800 text-sm md:text-base leading-none">
+              0
+            </span>
+            <span className="text-stone-500 text-[10px] md:text-[11px] font-medium uppercase tracking-wider mt-0.5 whitespace-nowrap">
+              Memories Added
+            </span>
+          </div>
+        </div>
+
+      </div>
+
+      {/* Visited Places Counter */}
+      <div className="absolute bottom-6 right-4 md:top-6 md:bottom-auto md:right-6 z-[1000] bg-white/95 backdrop-blur-sm px-4 py-2 rounded-lg shadow-sm border border-stone-200 flex items-center gap-2 pointer-events-none transition-all">
+        <span className="text-base leading-none">📍</span>
+        <span className="font-medium font-sans text-stone-800 text-[13px] tracking-wide">
+          {selectedLocation ? "1 Place Visited" : "0 Places Visited"}
+        </span>
+      </div>
     </div>
   );
 };
