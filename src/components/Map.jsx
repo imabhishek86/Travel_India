@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, useMapEvents, useMap, Tooltip } from 'react-leaflet';
 import { useNavigate } from 'react-router-dom';
 import L from 'leaflet';
+import SearchLocation from './SearchLocation';
 
 // Fix for default Leaflet marker icon issue in React-Leaflet
 import icon from 'leaflet/dist/images/marker-icon.png';
@@ -210,6 +211,11 @@ const Map = () => {
         <TileLayer
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
           url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
+        />
+        
+        <SearchLocation 
+          setSelectedLocation={setSelectedLocation} 
+          setShowLocationCard={setShowLocationCard} 
         />
         
         <MapClickHandler onMapClick={handleMapClick} />
