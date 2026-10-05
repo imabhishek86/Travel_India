@@ -82,6 +82,12 @@ const SearchLocation = ({ setSelectedLocation, setShowLocationCard }) => {
         });
         
         setShowLocationCard(true);
+
+        window.dataLayer = window.dataLayer || [];
+        window.dataLayer.push({
+          event: "search_location",
+          search_term: trimmedQuery
+        });
       } else {
         setErrorMsg("Location not found. Try another city or place.");
       }
