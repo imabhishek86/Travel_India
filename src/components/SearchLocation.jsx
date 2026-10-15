@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useMap } from 'react-leaflet';
 import L from 'leaflet';
 
-const SearchLocation = ({ setSelectedLocation, setShowLocationCard }) => {
+const SearchLocation = ({ setSelectedLocation, setShowLocationCard, onLocationFound }) => {
   const map = useMap();
   const [query, setQuery] = useState('');
   const [isSearching, setIsSearching] = useState(false);
@@ -73,13 +73,19 @@ const SearchLocation = ({ setSelectedLocation, setShowLocationCard }) => {
           year: 'numeric'
         });
 
-        setSelectedLocation({
+        const newLocation = {
           lat: lat,
           lng: lon,
           name: locationName,
           stateName: state,
           lastVisited: formattedDate
-        });
+        };
+
+        if (onLocationFound) {
+          onLocationFound(newLocation);
+        } else if (setSelectedLocation) {
+          setSelectedLocation(newLocation);
+        }
         
         setShowLocationCard(true);
 

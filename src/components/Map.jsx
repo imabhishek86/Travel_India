@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, useMapEvents, useMap, Tooltip } from 'react-leaflet';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
+import { MapContainer, TileLayer, Marker, useMapEvents, useMap, Tooltip } from 'react-leaflet';
 import { useNavigate } from 'react-router-dom';
 import L from 'leaflet';
 import SearchLocation from './SearchLocation';
+import LocationFilterPanel from './LocationFilterPanel';
 
 // Fix for default Leaflet marker icon issue in React-Leaflet
 import icon from 'leaflet/dist/images/marker-icon.png';
@@ -19,6 +20,36 @@ let DefaultIcon = L.icon({
 });
 
 L.Marker.prototype.options.icon = DefaultIcon;
+
+// Helper to determine whether two location records match
+const isSameLocation = (locA, locB) => {
+  if (!locA || !locB) return false;
+  if (locA.id && locB.id && locA.id === locB.id) return true;
+  return (
+    Math.abs(Number(locA.lat) - Number(locB.lat)) < 0.0001 &&
+    Math.abs(Number(locA.lng) - Number(locB.lng)) < 0.0001
+  );
+};
+
+// Safe date parser to handle valid strings, empty dates, or invalid formats safely
+const parseVisitDate = (dateStr) => {
+  if (!dateStr || typeof dateStr !== 'string') return null;
+  const timestamp = Date.parse(dateStr);
+  return Number.isNaN(timestamp) ? null : timestamp;
+};
+
+// Initial demo locations for India travel map
+// Reflects authentic demo data with varying availability of state and visit dates
+const DEFAULT_DEMO_LOCATIONS = [
+  { id: 'demo-1', name: 'Delhi', lat: 28.6139, lng: 77.2090, stateName: '', lastVisited: '' },
+  { id: 'demo-2', name: 'Mumbai', lat: 19.0760, lng: 72.8777, stateName: 'Maharashtra', lastVisited: '15 Jan 2026' },
+  { id: 'demo-3', name: 'Goa', lat: 15.2993, lng: 74.1240, stateName: 'Goa', lastVisited: '10 Feb 2026' },
+  { id: 'demo-4', name: 'Jaipur', lat: 26.9124, lng: 75.7873, stateName: 'Rajasthan', lastVisited: '28 Aug 2025' },
+  { id: 'demo-5', name: 'Bengaluru', lat: 12.9716, lng: 77.5946, stateName: 'Karnataka', lastVisited: '05 Nov 2025' },
+  { id: 'demo-6', name: 'Varanasi', lat: 25.3176, lng: 82.9739, stateName: 'Uttar Pradesh', lastVisited: '12 Dec 2025' },
+  { id: 'demo-7', name: 'Kochi', lat: 9.9312, lng: 76.2673, stateName: 'Kerala', lastVisited: '20 Mar 2026' },
+  { id: 'demo-8', name: 'Shimla', lat: 31.1048, lng: 77.1734, stateName: 'Himachal Pradesh', lastVisited: '' }
+];
 
 // Component to handle map clicks
 const MapClickHandler = ({ onMapClick }) => {
@@ -51,7 +82,7 @@ const indiaBounds = [
 const FitIndiaBounds = () => {
     const map = useMap();
 
-    React.useEffect(() => {
+    useEffect(() => {
         // Run after initial layout to ensure container dimensions are calculated
         setTimeout(() => {
             map.invalidateSize();
@@ -72,13 +103,41 @@ const FitIndiaBounds = () => {
 };
 
 const Map = () => {
+  // Underlying locations dataset: single source of truth initialized from localStorage or defaults
+  const [locations, setLocations] = useState(() => {
+    try {
+      const savedLocations = localStorage.getItem('travelMapLocations');
+      if (savedLocations) {
+        const parsed = JSON.parse(savedLocations);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed;
+        }
+      }
+    } catch (error) {
+      console.error("Error reading travelMapLocations from localStorage:", error);
+    }
+
+    // Merge with any existing single selectedLocation from localStorage if available
+    try {
+      const savedSelected = localStorage.getItem('travelMapSelectedLocation');
+      if (savedSelected) {
+        const parsed = JSON.parse(savedSelected);
+        if (parsed && parsed.lat && parsed.lng) {
+          const exists = DEFAULT_DEMO_LOCATIONS.some((d) => isSameLocation(d, parsed));
+          if (!exists) {
+            return [parsed, ...DEFAULT_DEMO_LOCATIONS];
+          }
+        }
+      }
+    } catch (error) {
+      console.error("Error reading travelMapSelectedLocation:", error);
+    }
+
+    return DEFAULT_DEMO_LOCATIONS;
+  });
+
   const [selectedLocation, setSelectedLocation] = useState(() => {
     try {
-      // NOTE: We cannot reliably distinguish between a normal reload (F5) 
-      // and a hard reload (Ctrl+F5) using the Performance Navigation API.
-      // Both return type === 'reload'. Therefore, to ensure the marker 
-      // survives a normal reload as requested, we always restore it.
-      // The user can remove the marker by double-clicking it.
       const savedLocation = localStorage.getItem('travelMapSelectedLocation');
       if (savedLocation) {
         return JSON.parse(savedLocation);
@@ -88,17 +147,97 @@ const Map = () => {
     }
     return null;
   });
+
   const [showLocationCard, setShowLocationCard] = useState(false);
 
-  React.useEffect(() => {
+  // Filter & Sort State
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedState, setSelectedState] = useState('All');
+  const [sortBy, setSortBy] = useState('name-asc');
+
+  const hideTimerRef = useRef(null);
+  const navigate = useNavigate();
+
+  // Persist locations to localStorage
+  useEffect(() => {
+    try {
+      localStorage.setItem('travelMapLocations', JSON.stringify(locations));
+    } catch (error) {
+      console.error("Error writing travelMapLocations to localStorage:", error);
+    }
+  }, [locations]);
+
+  // Persist selected location to localStorage
+  useEffect(() => {
     if (selectedLocation) {
       localStorage.setItem('travelMapSelectedLocation', JSON.stringify(selectedLocation));
     } else {
       localStorage.removeItem('travelMapSelectedLocation');
     }
   }, [selectedLocation]);
-  const hideTimerRef = React.useRef(null);
-  const navigate = useNavigate();
+
+  // Compute available unique states from locations where stateName exists
+  const availableStates = useMemo(() => {
+    const states = new Set(locations.map((loc) => loc.stateName).filter(Boolean));
+    return Array.from(states).sort();
+  }, [locations]);
+
+  // Derive filtered and sorted locations without mutating original array
+  const filteredLocations = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+
+    // 1. Filter
+    const filtered = locations.filter((loc) => {
+      // Search by location name (case-insensitive)
+      const matchesName = !query || (loc.name && loc.name.toLowerCase().includes(query));
+      // Search / filter by state if selected
+      const matchesState = selectedState === 'All' || loc.stateName === selectedState;
+      return matchesName && matchesState;
+    });
+
+    // 2. Sort without mutating original objects
+    return [...filtered].sort((a, b) => {
+      if (sortBy === 'name-asc') {
+        return (a.name || '').localeCompare(b.name || '', undefined, { sensitivity: 'base' });
+      }
+      if (sortBy === 'name-desc') {
+        return (b.name || '').localeCompare(a.name || '', undefined, { sensitivity: 'base' });
+      }
+      if (sortBy === 'date-desc') {
+        const timeA = parseVisitDate(a.lastVisited);
+        const timeB = parseVisitDate(b.lastVisited);
+        if (timeA !== null && timeB !== null) {
+          if (timeB !== timeA) return timeB - timeA;
+          return (a.name || '').localeCompare(b.name || '');
+        }
+        if (timeA !== null) return -1;
+        if (timeB !== null) return 1;
+        return (a.name || '').localeCompare(b.name || '');
+      }
+      if (sortBy === 'date-asc') {
+        const timeA = parseVisitDate(a.lastVisited);
+        const timeB = parseVisitDate(b.lastVisited);
+        if (timeA !== null && timeB !== null) {
+          if (timeA !== timeB) return timeA - timeB;
+          return (a.name || '').localeCompare(b.name || '');
+        }
+        if (timeA !== null) return -1;
+        if (timeB !== null) return 1;
+        return (a.name || '').localeCompare(b.name || '');
+      }
+      return 0;
+    });
+  }, [locations, searchQuery, selectedState, sortBy]);
+
+  // Check if any filter or non-default sort is active
+  const isFilterActive = searchQuery.trim() !== '' || selectedState !== 'All' || sortBy !== 'name-asc';
+
+  // Reset filters to defaults
+  const handleClearFilters = () => {
+    setSearchQuery('');
+    setSelectedState('All');
+    setSortBy('name-asc');
+  };
 
   const handleMouseEnter = () => {
     if (hideTimerRef.current) {
@@ -109,14 +248,21 @@ const Map = () => {
   };
 
   const handleMouseLeave = () => {
-    // Small delay before hiding so user can move mouse to the tooltip
     hideTimerRef.current = setTimeout(() => {
       setShowLocationCard(false);
     }, 250);
   };
 
+  // Add or update location in the dataset safely
+  const saveLocationToDataset = (newLoc) => {
+    setLocations((prev) => {
+      const exists = prev.some((l) => isSameLocation(l, newLoc));
+      if (exists) return prev;
+      return [newLoc, ...prev];
+    });
+  };
+
   const handleMapClick = async (coords) => {
-    // TEMPORARY: This will later come from MongoDB when memories are stored
     const today = new Date();
     const formattedDate = today.toLocaleDateString('en-GB', {
       day: 'numeric',
@@ -124,20 +270,22 @@ const Map = () => {
       year: 'numeric'
     });
 
-    // Set initial loading state and automatically show the card on new click
-    setSelectedLocation({
+    const pendingLoc = {
+      id: `loc-${Date.now()}`,
       lat: coords.lat,
       lng: coords.lng,
       name: "Locating...",
       stateName: "",
       lastVisited: formattedDate
-    });
+    };
+
+    setSelectedLocation(pendingLoc);
     setShowLocationCard(true);
 
     try {
       const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${coords.lat}&lon=${coords.lng}`, {
         headers: {
-          'User-Agent': 'TravelMapIndia/1.0' // Respect API usage requirements
+          'User-Agent': 'TravelMapIndia/1.0'
         }
       });
 
@@ -146,7 +294,6 @@ const Map = () => {
       }
 
       const data = await response.json();
-      
       const address = data.address || {};
       const city = address.city || address.town || address.village || address.county || address.state_district || "Unknown Location";
       const state = address.state || "";
@@ -158,43 +305,72 @@ const Map = () => {
          locationName = state;
       }
 
-      setSelectedLocation({
+      const completedLoc = {
+        id: `loc-${Date.now()}`,
         lat: coords.lat,
         lng: coords.lng,
         name: locationName,
         stateName: state,
         lastVisited: formattedDate
-      });
+      };
+
+      setSelectedLocation(completedLoc);
+      saveLocationToDataset(completedLoc);
 
     } catch (error) {
       console.error("Reverse geocoding failed:", error);
       
-      // Fallback on error so application doesn't crash
-      setSelectedLocation({
+      const fallbackLoc = {
+        id: `loc-${Date.now()}`,
         lat: coords.lat,
         lng: coords.lng,
         name: "Selected Location",
         stateName: "",
         lastVisited: formattedDate
-      });
+      };
+
+      setSelectedLocation(fallbackLoc);
+      saveLocationToDataset(fallbackLoc);
     }
   };
 
-  const handleViewDetails = () => {
-    if (selectedLocation) {
-      // Pass the selected location via React Router state
-      navigate('/location/details', { state: selectedLocation });
+  const handleLocationFound = (newLoc) => {
+    setSelectedLocation(newLoc);
+    saveLocationToDataset(newLoc);
+    setShowLocationCard(true);
+  };
+
+  const handleSelectLocation = (loc) => {
+    setSelectedLocation(loc);
+    setShowLocationCard(true);
+  };
+
+  const handleViewDetails = (locToView) => {
+    const target = locToView || selectedLocation;
+    if (target) {
+      window.dataLayer = window.dataLayer || [];
+      window.dataLayer.push({
+        event: "view_location",
+        location_name: target.name
+      });
+      navigate('/location/details', { state: target });
     }
   };
 
   // Cleanup timer on unmount
-  React.useEffect(() => {
+  useEffect(() => {
     return () => {
       if (hideTimerRef.current) {
         clearTimeout(hideTimerRef.current);
       }
     };
   }, []);
+
+  // Dashboard statistics based on total dataset to preserve intended meaning
+  const totalPlacesVisited = locations.length;
+  const uniqueStatesCount = useMemo(() => {
+    return new Set(locations.map((loc) => loc.stateName).filter(Boolean)).size;
+  }, [locations]);
 
   return (
     <div className="absolute inset-0 z-0 flex justify-center bg-[#faf9f6]">
@@ -215,11 +391,30 @@ const Map = () => {
         
         <SearchLocation 
           setSelectedLocation={setSelectedLocation} 
-          setShowLocationCard={setShowLocationCard} 
+          setShowLocationCard={setShowLocationCard}
+          onLocationFound={handleLocationFound}
+        />
+
+        <LocationFilterPanel 
+          locations={locations}
+          filteredLocations={filteredLocations}
+          selectedLocation={selectedLocation}
+          onSelectLocation={handleSelectLocation}
+          searchQuery={searchQuery}
+          setSearchQuery={setSearchQuery}
+          selectedState={selectedState}
+          setSelectedState={setSelectedState}
+          availableStates={availableStates}
+          sortBy={sortBy}
+          setSortBy={setSortBy}
+          onClearFilters={handleClearFilters}
+          isFilterActive={isFilterActive}
+          onViewDetails={handleViewDetails}
         />
         
         <MapClickHandler onMapClick={handleMapClick} />
 
+        {/* Only the currently selected location is visually represented by a marker */}
         {selectedLocation && (
           <Marker 
             position={[selectedLocation.lat, selectedLocation.lng]}
@@ -250,16 +445,22 @@ const Map = () => {
               >
                 <div 
                   className="flex flex-col gap-1 p-2 font-sans cursor-pointer group min-w-[140px]"
-                  onClick={handleViewDetails}
+                  onClick={() => handleViewDetails(selectedLocation)}
                   onMouseEnter={handleMouseEnter}
                   onMouseLeave={handleMouseLeave}
                 >
                   <span className="font-bold font-serif text-stone-800 text-[16px] leading-tight tracking-tight">
                     {selectedLocation.name}
                   </span>
-                  <span className="text-stone-500 text-[11px] font-medium border-b border-stone-100 pb-2 mb-1 uppercase tracking-wide">
-                    Visited: <span className="text-stone-800">{selectedLocation.lastVisited}</span>
-                  </span>
+                  {selectedLocation.lastVisited ? (
+                    <span className="text-stone-500 text-[11px] font-medium border-b border-stone-100 pb-2 mb-1 uppercase tracking-wide">
+                      Visited: <span className="text-stone-800">{selectedLocation.lastVisited}</span>
+                    </span>
+                  ) : (
+                    <span className="text-stone-400 text-[11px] italic border-b border-stone-100 pb-2 mb-1">
+                      Visit date not recorded
+                    </span>
+                  )}
                   <span className="text-orange-700 text-[13px] font-medium group-hover:text-orange-800 transition-colors flex items-center justify-between">
                     View Journal <span className="transform group-hover:translate-x-1 transition-transform">→</span>
                   </span>
@@ -270,14 +471,14 @@ const Map = () => {
         )}
       </MapContainer>
 
-      {/* Travel Statistics */}
+      {/* Travel Statistics - Preserves total counts as intended */}
       <div className="absolute top-4 left-1/2 -translate-x-1/2 z-[1000] bg-white/95 backdrop-blur-sm py-2.5 px-4 md:py-3 md:px-8 rounded-xl shadow-sm border border-stone-200 flex flex-row flex-wrap justify-center md:flex-nowrap items-center gap-x-6 gap-y-3 pointer-events-none transition-all w-[92%] md:w-auto max-w-3xl">
         
         <div className="flex items-center gap-2.5">
           <span className="text-xl leading-none">📍</span>
           <div className="flex flex-col">
             <span className="font-bold text-stone-800 text-sm md:text-base leading-none">
-              {selectedLocation ? 1 : 0}
+              {totalPlacesVisited}
             </span>
             <span className="text-stone-500 text-[10px] md:text-[11px] font-medium uppercase tracking-wider mt-0.5 whitespace-nowrap">
               Places Visited
@@ -291,7 +492,7 @@ const Map = () => {
           <span className="text-xl leading-none">🇮🇳</span>
           <div className="flex flex-col">
             <span className="font-bold text-stone-800 text-sm md:text-base leading-none">
-              {(selectedLocation && selectedLocation.stateName) ? 1 : 0}
+              {uniqueStatesCount}
             </span>
             <span className="text-stone-500 text-[10px] md:text-[11px] font-medium uppercase tracking-wider mt-0.5 whitespace-nowrap">
               States Covered
@@ -315,11 +516,11 @@ const Map = () => {
 
       </div>
 
-      {/* Visited Places Counter */}
+      {/* Visited Places Counter - Reflects total places visited */}
       <div className="absolute bottom-6 right-4 md:top-6 md:bottom-auto md:right-6 z-[1000] bg-white/95 backdrop-blur-sm px-4 py-2 rounded-lg shadow-sm border border-stone-200 flex items-center gap-2 pointer-events-none transition-all">
         <span className="text-base leading-none">📍</span>
         <span className="font-medium font-sans text-stone-800 text-[13px] tracking-wide">
-          {selectedLocation ? "1 Place Visited" : "0 Places Visited"}
+          {totalPlacesVisited} {totalPlacesVisited === 1 ? 'Place' : 'Places'} Visited
         </span>
       </div>
     </div>
