@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { MapContainer, TileLayer, Marker, useMapEvents, useMap, Tooltip } from 'react-leaflet';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import L from 'leaflet';
 import SearchLocation from './SearchLocation';
 import LocationFilterPanel from './LocationFilterPanel';
@@ -31,25 +31,7 @@ const isSameLocation = (locA, locB) => {
   );
 };
 
-// Safe date parser to handle valid strings, empty dates, or invalid formats safely
-const parseVisitDate = (dateStr) => {
-  if (!dateStr || typeof dateStr !== 'string') return null;
-  const timestamp = Date.parse(dateStr);
-  return Number.isNaN(timestamp) ? null : timestamp;
-};
-
-// Initial demo locations for India travel map
-// Reflects authentic demo data with varying availability of state and visit dates
-const DEFAULT_DEMO_LOCATIONS = [
-  { id: 'demo-1', name: 'Delhi', lat: 28.6139, lng: 77.2090, stateName: '', lastVisited: '' },
-  { id: 'demo-2', name: 'Mumbai', lat: 19.0760, lng: 72.8777, stateName: 'Maharashtra', lastVisited: '15 Jan 2026' },
-  { id: 'demo-3', name: 'Goa', lat: 15.2993, lng: 74.1240, stateName: 'Goa', lastVisited: '10 Feb 2026' },
-  { id: 'demo-4', name: 'Jaipur', lat: 26.9124, lng: 75.7873, stateName: 'Rajasthan', lastVisited: '28 Aug 2025' },
-  { id: 'demo-5', name: 'Bengaluru', lat: 12.9716, lng: 77.5946, stateName: 'Karnataka', lastVisited: '05 Nov 2025' },
-  { id: 'demo-6', name: 'Varanasi', lat: 25.3176, lng: 82.9739, stateName: 'Uttar Pradesh', lastVisited: '12 Dec 2025' },
-  { id: 'demo-7', name: 'Kochi', lat: 9.9312, lng: 76.2673, stateName: 'Kerala', lastVisited: '20 Mar 2026' },
-  { id: 'demo-8', name: 'Shimla', lat: 31.1048, lng: 77.1734, stateName: 'Himachal Pradesh', lastVisited: '' }
-];
+import { DEFAULT_DEMO_LOCATIONS, parseVisitDate } from '../data/locations';
 
 // Component to handle map clicks
 const MapClickHandler = ({ onMapClick }) => {
@@ -67,6 +49,30 @@ const MapClickHandler = ({ onMapClick }) => {
       }
     }
   });
+  return null;
+};
+
+// Component to handle focusing on an incoming target location from navigation state
+const MapFocusHandler = ({ targetLocation }) => {
+  const map = useMap();
+  const focusedRef = useRef(null);
+
+  useEffect(() => {
+    if (targetLocation && targetLocation.lat && targetLocation.lng) {
+      const targetKey = targetLocation.id || `${targetLocation.lat},${targetLocation.lng}`;
+      if (focusedRef.current !== targetKey) {
+        focusedRef.current = targetKey;
+        const timer = setTimeout(() => {
+          map.flyTo([targetLocation.lat, targetLocation.lng], 12, {
+            animate: true,
+            duration: 1.2
+          });
+        }, 150);
+        return () => clearTimeout(timer);
+      }
+    }
+  }, [map, targetLocation]);
+
   return null;
 };
 
@@ -103,18 +109,30 @@ const FitIndiaBounds = () => {
 };
 
 const Map = () => {
+  const routerLocation = useLocation();
+  const navSelected = routerLocation?.state?.selectedLocation;
+
   // Underlying locations dataset: single source of truth initialized from localStorage or defaults
   const [locations, setLocations] = useState(() => {
+    let base = DEFAULT_DEMO_LOCATIONS;
     try {
       const savedLocations = localStorage.getItem('travelMapLocations');
       if (savedLocations) {
         const parsed = JSON.parse(savedLocations);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          return parsed;
+          base = parsed;
         }
       }
     } catch (error) {
       console.error("Error reading travelMapLocations from localStorage:", error);
+    }
+
+    if (navSelected && navSelected.lat && navSelected.lng) {
+      const exists = base.some((d) => isSameLocation(d, navSelected));
+      if (!exists) {
+        return [navSelected, ...base];
+      }
+      return base;
     }
 
     // Merge with any existing single selectedLocation from localStorage if available
@@ -123,9 +141,9 @@ const Map = () => {
       if (savedSelected) {
         const parsed = JSON.parse(savedSelected);
         if (parsed && parsed.lat && parsed.lng) {
-          const exists = DEFAULT_DEMO_LOCATIONS.some((d) => isSameLocation(d, parsed));
+          const exists = base.some((d) => isSameLocation(d, parsed));
           if (!exists) {
-            return [parsed, ...DEFAULT_DEMO_LOCATIONS];
+            return [parsed, ...base];
           }
         }
       }
@@ -133,10 +151,13 @@ const Map = () => {
       console.error("Error reading travelMapSelectedLocation:", error);
     }
 
-    return DEFAULT_DEMO_LOCATIONS;
+    return base;
   });
 
   const [selectedLocation, setSelectedLocation] = useState(() => {
+    if (navSelected && navSelected.lat && navSelected.lng) {
+      return navSelected;
+    }
     try {
       const savedLocation = localStorage.getItem('travelMapSelectedLocation');
       if (savedLocation) {
@@ -148,7 +169,9 @@ const Map = () => {
     return null;
   });
 
-  const [showLocationCard, setShowLocationCard] = useState(false);
+  const [showLocationCard, setShowLocationCard] = useState(() => {
+    return Boolean(navSelected && navSelected.lat && navSelected.lng);
+  });
 
   // Filter & Sort State
   const [searchQuery, setSearchQuery] = useState('');
@@ -384,6 +407,7 @@ const Map = () => {
         className="w-full h-full z-0"
       >
         <FitIndiaBounds />
+        <MapFocusHandler targetLocation={navSelected} />
         <TileLayer
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
           url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
