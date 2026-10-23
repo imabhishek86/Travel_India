@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import Home from './pages/Home';
 import LocationDetails from './pages/LocationDetails';
 import TravelTimeline from './pages/TravelTimeline';
+import Premium from './pages/Premium';
 
 function App() {
   return (
@@ -13,6 +14,7 @@ function App() {
         {/* TEMPORARY: This route uses generic navigation state for now. 
             When MongoDB is added, this should be updated to /location/:locationId */}
         <Route path="/location/details" element={<LocationDetails />} />
+        <Route path="/premium" element={<Premium />} />
       </Routes>
     </BrowserRouter>
   );

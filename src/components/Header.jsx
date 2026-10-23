@@ -20,6 +20,7 @@ const Header = () => {
             <Link to="/" className="text-stone-600 hover:text-orange-700 transition-colors font-medium text-sm">Home</Link>
             <Link to="/timeline" className="text-stone-600 hover:text-orange-700 transition-colors font-medium text-sm">Timeline</Link>
             <Link to="/timeline" className="text-stone-600 hover:text-orange-700 transition-colors font-medium text-sm">My Travels</Link>
+            <Link to="/premium" className="text-stone-600 hover:text-orange-700 transition-colors font-medium text-sm">TravelMap Plus</Link>
             <a href="#" className="text-stone-600 hover:text-orange-700 transition-colors font-medium text-sm">About</a>
             <button className="bg-orange-700 hover:bg-orange-800 text-white px-5 py-2 rounded-md text-sm font-medium transition-all shadow-sm hover:shadow cursor-pointer">
               Add Memory
@@ -51,6 +52,7 @@ const Header = () => {
           <Link to="/" onClick={() => setIsMenuOpen(false)} className="block px-3 py-2 rounded-md text-base font-medium text-stone-700 hover:text-orange-700 hover:bg-orange-50 transition-colors">Home</Link>
           <Link to="/timeline" onClick={() => setIsMenuOpen(false)} className="block px-3 py-2 rounded-md text-base font-medium text-stone-700 hover:text-orange-700 hover:bg-orange-50 transition-colors">Timeline</Link>
           <Link to="/timeline" onClick={() => setIsMenuOpen(false)} className="block px-3 py-2 rounded-md text-base font-medium text-stone-700 hover:text-orange-700 hover:bg-orange-50 transition-colors">My Travels</Link>
+          <Link to="/premium" onClick={() => setIsMenuOpen(false)} className="block px-3 py-2 rounded-md text-base font-medium text-stone-700 hover:text-orange-700 hover:bg-orange-50 transition-colors">TravelMap Plus</Link>
           <a href="#" className="block px-3 py-2 rounded-md text-base font-medium text-stone-700 hover:text-orange-700 hover:bg-orange-50 transition-colors">About</a>
           <div className="px-3 py-3">
             <button className="w-full bg-orange-700 hover:bg-orange-800 text-white px-4 py-2 rounded-md font-medium transition-colors shadow-sm cursor-pointer">
